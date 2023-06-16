@@ -16,7 +16,7 @@ async def handle_index_page(request):
 
 
 async def archive(request, read_up_bytes=102400):
-    archive_hash = request.match_info.get('archive_hash')
+    archive_hash = request.match_info['archive_hash']
     photos_filepath = os.path.join(args.path, archive_hash)
     if not os.path.exists(photos_filepath):
         async with aiofiles.open('404.html', mode='r') as error_file:
@@ -36,24 +36,21 @@ async def archive(request, read_up_bytes=102400):
         cwd=photos_filepath,
     )
     try:
-        while True:
+        while not process.stdout.at_eof():
             zip_binary = await process.stdout.read(n=read_up_bytes)
             logger.info('Sending archive chunk ...')
             await response.write(zip_binary)
             if args.delay:
                 await asyncio.sleep(5)
-            if process.stdout.at_eof():
-                return response
+        return response
     except asyncio.CancelledError:
         logger.info('Download was interrupted')
         raise
     finally:
-        try:
+        if process.returncode is None:
             process.kill()
             await process.communicate()
             logger.info('Process was killed')
-        except ProcessLookupError:
-            logger.info('Process has stopped already')
 
 
 if __name__ == '__main__':
